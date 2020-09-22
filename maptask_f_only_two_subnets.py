@@ -1,18 +1,27 @@
 # -*- coding: utf-8 -*-
 import json
+# from subprocess import Popen,PIPE
 import subprocess
+import torch.multiprocessing as multiprocessing
+
+import sys
+import pandas as pd
+import time as t
+import platform
 import os
 import pickle
 import numpy as np
 import feature_vars as feat_dicts
-
+from time import gmtime, strftime
+# import shutil
+from random import randint
 
 seq_length = 600
 no_subnets = False
 
 experiment_top_path = './two_subnets/'
 
-py_env = '/group/project/cstr1/mscslp/2019-20/s0910315_Sarah_Burne_James/miniconda3/bin/python'
+py_env = '/afs/inf.ed.ac.uk/user/s09/s0910315/miniconda3/bin/python'
 
 # %% Common settings for all experiments
 num_epochs = 1500
@@ -140,7 +149,7 @@ Acous_10ms_Ling_10ms = {
 
 # %% Experiments list
 
-gpu_select = 3
+gpu_select = 0
 test_indices = [0,1,2]
 
 experiment_name_list = [

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+#only need to re-run the experiments that use the linguistic features
 import json
 import subprocess
 import os
@@ -34,49 +35,6 @@ test_list_path = './data/splits/testing.txt'
 #%% Experiment settings
 
 # note: master is the one that needs to be changed in all cases for the no_subnet experiments
-Acous_50ms = {
-    'lr': 0.01,
-    'l2_dict':
-        { 'emb':0.0,
-         'out': 0.00001,
-         'master': 0.0001,
-         'acous': 0,
-         'visual': 0
-          },
-    'dropout_dict': {
-        'master_out': 0.5,
-        'master_in': 0,  # <- this doesn't affect anything when there are subnets
-        'acous_in': 0,
-        'acous_out': 0,
-        'visual_in': 0,
-        'visual_out': 0.
-         },
-    'hidden_nodes_master': 60,
-    'hidden_nodes_acous': 0,
-    'hidden_nodes_visual': 0
-    }
-
-Acous_10ms = {
-    'lr':0.01,
-    'l2_dict':
-        { 'emb':0.0,
-         'out': 0.00001,
-         'master': 0.00001,
-         'acous': 0,
-         'visual': 0
-          },
-    'dropout_dict': {
-        'master_out': 0.5,
-        'master_in': 0.5,
-        'acous_in': 0,
-        'acous_out': 0,
-        'visual_in': 0,
-        'visual_out': 0.
-         },
-    'hidden_nodes_master': 60,
-    'hidden_nodes_acous': 0,
-    'hidden_nodes_visual': 0
-    }
 
 Ling_50ms = {
     'lr':0.001,
@@ -193,8 +151,6 @@ gpu_select = 3
 test_indices = [0,1,2,3,4]
 
 experiment_name_list = [
-    '1_Acous_50ms',
-    '2_Acous_10ms',
     '3_Ling_50ms',
     '4_Ling_Asynch',
     '5_Ling_10ms',
@@ -203,8 +159,6 @@ experiment_name_list = [
 ]
 
 experiment_features_lists = [
-    feat_dicts.gemaps_50ms_dict_list,
-    feat_dicts.gemaps_10ms_dict_list,
     feat_dicts.word_reg_dict_list_acous,
     feat_dicts.word_irreg_fast_dict_list,
     feat_dicts.word_reg_dict_list_10ms_acous,
@@ -214,8 +168,6 @@ experiment_features_lists = [
     ]
 
 experiment_settings_list = [
-    Acous_50ms,
-    Acous_10ms,
     Ling_50ms,
     Ling_Asynch,
     Ling_10ms,

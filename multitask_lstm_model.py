@@ -33,9 +33,10 @@ else:
 class LSTMPredictor(nn.Module):
 
     def __init__(self, lstm_settings_dict, feature_size_dict={'acous': 0, 'visual': 0},
-                 batch_size=32, seq_length=200, prediction_length=60, embedding_info=[]):
+                 batch_size=32, seq_length=200, prediction_length=60, embedding_info=[], number_of_corpora=2):
         super(LSTMPredictor, self).__init__()
 
+        self.number_of_corpora = number_of_corpora
         # General model settings
         self.batch_size = batch_size
         self.seq_length = seq_length
@@ -149,7 +150,8 @@ class LSTMPredictor(nn.Module):
             self.dropout_dict[drop_key] = nn.Dropout(drop_val)
             setattr(self,'dropout_'+str(drop_key),self.dropout_dict[drop_key])
 
-        self.out = nn.Linear(self.lstm_settings_dict['hidden_dims']['master'], prediction_length).type(dtype)
+        self.turntaking_out = nn.Linear(self.lstm_settings_dict['hidden_dims']['master'], prediction_length).type(dtype)
+        self.corpus_predict_out = nn.Linear(self.lstm_settings_dict['hidden_dims']['master'], self.number_of_corpora).type(dtype)
         self.init_hidden()
 
     def init_hidden(self):
@@ -192,8 +194,10 @@ class LSTMPredictor(nn.Module):
 
     def weights_init(self, init_std):
         # init bias to zero recommended in http://proceedings.mlr.press/v37/jozefowicz15.pdf
-        nn.init.normal(self.out.weight.data, 0, init_std)
-        nn.init.constant(self.out.bias, 0)
+        nn.init.normal(self.turntaking_out.weight.data, 0, init_std)
+        nn.init.normal(self.corpus_predict_out.weight.data, 0, init_std)
+        nn.init.constant(self.turntaking_out.bias, 0)
+        nn.init.constant(self.corpus_predict_out.bias, 0)
 
         for lstm in self.lstm_dict.keys():
             if self.lstm_settings_dict['is_irregular'][lstm]:
@@ -213,18 +217,15 @@ class LSTMPredictor(nn.Module):
         embeds_two = []
 
         for emb_func_indx in range(len(self.embeddings[modality])):
-            debug1 = self.embeddings[modality][emb_func_indx](
-                Variable(in_data[:, :, self.embedding_indices[modality][emb_func_indx][0][0]:
-                                       self.embedding_indices[modality][emb_func_indx][0][1]] \
-                         .data.type(self.embed_data_types[modality][emb_func_indx])))
             embeds_one_tmp = self.embeddings[modality][emb_func_indx](
                 Variable(in_data[:, :, self.embedding_indices[modality][emb_func_indx][0][0]:
                                        self.embedding_indices[modality][emb_func_indx][0][1]] \
-                         .data.type(self.embed_data_types[modality][emb_func_indx]).squeeze(dim=2)))
+                         .data.type(self.embed_data_types[modality][emb_func_indx]).squeeze()))
+
             embeds_two_tmp = self.embeddings[modality][emb_func_indx](
                 Variable(in_data[:, :, self.embedding_indices[modality][emb_func_indx][1][0]:
                                        self.embedding_indices[modality][emb_func_indx][1][1]] \
-                         .data.type(self.embed_data_types[modality][emb_func_indx]).squeeze(dim=2)))
+                         .data.type(self.embed_data_types[modality][emb_func_indx]).squeeze()))
 
             if not (self.lstm_settings_dict['uses_master_time_rate'][modality]) and self.lstm_settings_dict['is_irregular'][modality]:
                 embeds_one_tmp = embeds_one_tmp.transpose(2,3)
@@ -381,7 +382,7 @@ class LSTMPredictor(nn.Module):
 
             lstm_out = self.dropout_dict[str(mod)+'_out'](lstm_out)
 
-        # sigmoid_out = F.sigmoid(self.out(lstm_out))
-        sigmoid_out = self.out(lstm_out)
-
-        return sigmoid_out
+        turntaking_out = self.turntaking_out(lstm_out)
+        corpus_predict_out = self.corpus_predict_out(lstm_out)
+        corpus_predict_out = torch.softmax(corpus_predict_out) # TODO: check softmax is along right dimension
+        return turntaking_out, corpus_predict_out

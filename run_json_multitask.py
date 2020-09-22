@@ -50,6 +50,7 @@ shuffle = True
 num_layers = 1
 onset_test_flag = True
 annotations_dir = './data/extracted_annotations/voice_activity/'
+number_of_corpora = 2
 
 proper_num_args = 2  # when called as subprocess, this consists of './run_json.py' and a dictionary of the other args
 print('Number of arguments is: ' + str(len(argv)))
@@ -57,12 +58,12 @@ print('Number of arguments is: ' + str(len(argv)))
 if not (len(argv) == proper_num_args):
     # %% Single run settings (settings when not being called as a subprocess)
     no_subnets = True
-    feature_dict_list = feat_dicts.gemaps_10ms_dict_list
+    feature_dict_list = feat_dicts.gemaps_50ms_dict_list
 
     train_on_f = True
     train_on_g = True
     test_on_f = True
-    test_on_g = True
+    test_on_g = False  # TODO: check different test sets are actually giving different results
 
     hidden_nodes_master = 50
     hidden_nodes_acous = 50
@@ -208,7 +209,6 @@ if slow_test:
 
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0, drop_last=False,
                                  pin_memory=p_memory)
-
 else:
     # quick test loader
     test_dataset = TurnPredictionDataset(feature_dict_list, annotations_dir, test_list_path, sequence_length,
@@ -293,7 +293,6 @@ def perf_plot(results_save, results_key):
     p_min = np.round(np.min(np.array(results_save[results_key])), 4)
     #    p_last = np.round(results_save[results_key][-1],4)
     plt.annotate(str(p_max), (np.argmax(np.array(results_save[results_key])), p_max))
-    plt.annotate(str(p_max), (np.argmax(np.array(results_save[results_key])), p_max))
     plt.annotate(str(p_min), (np.argmin(np.array(results_save[results_key])), p_min))
     #    plt.annotate(str(p_last), (len(results_save[results_key])-1,p_last))
     plt.title(results_key + name_append, fontsize=6)
@@ -310,6 +309,12 @@ loss_func_L1_no_reduce = nn.L1Loss(reduce=False)
 loss_func_BCE = nn.BCELoss()
 loss_func_BCE_Logit = nn.BCEWithLogitsLoss()
 
+# Corpus predict loss functions
+if number_of_corpora == 2:
+    corpus_predict_loss = nn.BCELoss()
+elif number_of_corpora > 2:
+    corpus_predict_loss = nn.CrossEntropyLoss()
+
 
 # %% Test function
 def test():
@@ -317,12 +322,11 @@ def test():
     results_dict = dict()
     losses_dict = dict()
     batch_sizes = list()
-    losses_mse, losses_l1 = [], []
+    losses_mse, losses_l1, corpus_predict_losses = [], [], []
     model.eval()
     # setup results_dict
     results_lengths = test_dataset.get_results_lengths()
     for file_name in test_file_list:
-        #        for g_f in ['g','f']:
         for g_f in data_select_dict[data_set_select]:
             # create new arrays for the results
             results_dict[file_name + '/' + g_f] = np.zeros([results_lengths[file_name], prediction_length])
@@ -399,7 +403,7 @@ def test():
         results_dict[conv_key + '/' + data_select_dict[data_set_select][0]] = np.array(
             results_dict[conv_key + '/' + data_select_dict[data_set_select][0]]).reshape(-1, prediction_length)
 
-    # get hold-shift f-scores
+    # get hold-shift f-scores 
     for pause_str in pause_str_list:
         true_vals = list()
         predicted_class = list()
@@ -426,7 +430,7 @@ def test():
         results_save['tp_' + pause_str].append(tp)
         print('majority vote f-score(' + pause_str + '):' + str(
             f1_score(true_vals, np.zeros([len(predicted_class)]).tolist(), average='weighted')))
-    # get prediction at onset f-scores
+    # get prediction at onset f-scores 
     # first get best threshold from training data
     if onset_test_flag: # this is set to true at top of file
         onset_train_true_vals = list()
@@ -573,11 +577,8 @@ results_save['train_losses'], results_save['test_losses'], results_save['indiv_p
 
 
 # %% Training
-best_loss = float("inf")
-best_model = None
-best_epoch = None
 for epoch in range(0, num_epochs):
-    model.train() # tells model you are in training mode, so e.g. apply dropout
+    model.train() #tells model you are in training mode, so e.g. apply dropout
     t_epoch_strt = t.time()
     loss_list = []
     model.change_batch_size_reset_states(train_batch_size)
@@ -641,12 +642,6 @@ for epoch in range(0, num_epochs):
     test()
     model.train()
     t_total_end = t.time()
-    print(f"\t Epoch: {epoch} \t New Loss: {results_save['test_losses'][-1]}")
-    print(f'\t Best Epoch: {best_epoch} \t Best Loss: {best_loss}')
-    if results_save['test_losses'][-1] < best_loss:
-        best_loss = results_save['test_losses'][-1]
-        best_model = deepcopy(model.state_dict())
-        best_epoch = epoch
     #        torch.save(model,)
     print(
         '{0} \t Test_loss: {1}\t Train_Loss: {2} \t FScore: {3}  \t Train_time: {4} \t Test_time: {5} \t Total_time: {6}'.format(
@@ -697,13 +692,11 @@ plot_person_error(results_save['indiv_perf'][-1]['bar_chart_labels'],
 plt.close('all')
 print(f'should have done the pickle dump to {results_dir}/{result_dir_name}')
 pickle.dump(results_save, open(results_dir + '/' + result_dir_name + '/results.p', 'wb'))
-pickle.dump(train_results_dict, open(results_dir + '/' + result_dir_name + '/train_results_dict.p', 'wb'))
 
-print(f"last model saved at epoch {epoch}, with a training loss of {np.round(results_save['test_losses'][-1], 4)}")
-torch.save(model.state_dict(), results_dir + '/' + result_dir_name + '/last_model.p')
-print(f"best model saved at epoch {best_epoch}, with a training loss of {best_loss}")
-torch.save(best_model, results_dir + '/' + result_dir_name + '/best_model.p')
-
+torch.save(model.state_dict(), results_dir + '/' + result_dir_name + '/model.p')
+#  write model location to file so it can be recovered to use different test sets
+with open("./model_location.txt", "a") as file:
+    file.write('\n' + results_dir + '/' + result_dir_name + '/model.p')
 if len(argv) == proper_num_args:
     json.dump(argv[1], open(results_dir + '/' + result_dir_name + '/settings.json', 'w'), indent=4, sort_keys=True)
 

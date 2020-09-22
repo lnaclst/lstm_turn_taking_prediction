@@ -1,6 +1,14 @@
 # LSTM Continuous Turn-Taking Prediction
+Original repo by [mattroddy](https://github.com/mattroddy/lstm_turn_taking_prediction). Clarifying comments added in collaboration with lnaclst and elliottgruzin, then forked again to adapt for my own MSc research. Very much a work in progress currently - familiarising myself with the code, and considering how to make it more manageable to work with.
 
-Pytorch implementation for two papers:
+## Added Experiments (all in progress)
+- splitting maptask by speaker role run_f_g_experiments_two_subnets.py and run_f_g_experiments_no_subnets.py (TODO: allow test on multiple test sets)
+- multitask model for maptask - predict speaker role as secondary task run_f_g_model_experiments.py (plan to add additional models too)
+
+________
+## Original Code
+
+Original code is a Pytorch implementation for two papers:
 
 1. [Multimodal Continuous Turn-Taking Prediction Using Multiscale RNNs](https://arxiv.org/pdf/1808.10785.pdf) (ICMI '18)
 2. [Investigating Speech Features for Continuous Turn-Taking Prediction

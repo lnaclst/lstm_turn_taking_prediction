@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import sys
-
 import h5py
 # import warnings
 # with warnings.catch_warnings():
@@ -26,43 +24,54 @@ import matplotlib as mpl
 
 mpl.use('Agg')
 import matplotlib.pyplot as plt
+
 import pandas as pd
+
 from sklearn.metrics import f1_score, roc_curve, confusion_matrix
 import time as t
 import pickle
+import platform
 from sys import argv
 import json
+from random import randint
 import os
-from pprint import pprint
+
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import feature_vars as feat_dicts
 
 # %% data set select
 data_set_select = 0  # 0 for maptask, 1 for mahnob, 2 for switchboard
+if data_set_select == 0:
+    #    train_batch_size = 878
+    train_batch_size = 128
+    test_batch_size = 1
+else:
+    train_batch_size = 128
+    # train_batch_size = 256
+    #    train_batch_size = 830 # change this
+    test_batch_size = 1
 
 # %% Batch settings
+alpha = 0.99  # smoothing constant DONT THINK THIS GETS USED
 init_std = 0.5
-train_batch_size = 128
-test_batch_size = 1  # should stay fixed at 1 when using slow test because batches are already set in the data loader
+momentum = 0
+test_batch_size = 1  # this should stay fixed at 1 when using slow test because the batches are already set in the data loader
 
+# sequence_length = 800
+# dropout = 0
 prediction_length = 60  # (3 seconds of prediction)
 shuffle = True
 num_layers = 1
 onset_test_flag = True
 annotations_dir = './data/extracted_annotations/voice_activity/'
 
-proper_num_args = 2  # when called as subprocess, this consists of './run_json.py' and a dictionary of the other args
+proper_num_args = 2 # when called as subprocess, this consists of './run_json.py' and a dictionary of the other args
 print('Number of arguments is: ' + str(len(argv)))
 
 if not (len(argv) == proper_num_args):
     # %% Single run settings (settings when not being called as a subprocess)
     no_subnets = True
-    feature_dict_list = feat_dicts.gemaps_10ms_dict_list
-
-    train_on_f = True
-    train_on_g = True
-    test_on_f = True
-    test_on_g = True
+    feature_dict_list = feat_dicts.gemaps_50ms_dict_list 
 
     hidden_nodes_master = 50
     hidden_nodes_acous = 50
@@ -78,6 +87,7 @@ if not (len(argv) == proper_num_args):
     slow_test = True
     early_stopping = True
     patience = 10
+
 
     l2_dict = {
         'emb': 0.0001,
@@ -143,13 +153,7 @@ if not (len(argv) == proper_num_args):
 else:
 
     json_dict = json.loads(argv[1]) # this argument is a dictionary of the settings for this experiment
-    train_on_f = True  # these get overwritten if they are found in json_dict
-    train_on_g = True
-    test_on_f = True
-    test_on_g = True
-    locals().update(json_dict)  # every key-value in the dictionary become objects in the local namespace
-
-
+    locals().update(json_dict) # every key-value in the dictionary become objects in the local namespace
     # print features:
     feature_print_list = list()
     for feat_dict in feature_dict_list:
@@ -174,8 +178,17 @@ lstm_settings_dict = {  #this works because these variables are set in locals fr
     'freeze_glove':freeze_glove_embeddings
 }
 
-# Decide whether to use cuda or not
+# %% Get OS type and whether to use cuda or not
+plat = platform.linux_distribution()[0]
+my_node = platform.node()
+
+if (plat == 'arch') | (my_node == 'Matthews-MacBook-Pro.local'):
+    print('platform: arch')
+else:
+    print('platform: ' + str(plat))
+
 use_cuda = torch.cuda.is_available()
+
 print('Use CUDA: ' + str(use_cuda))
 
 if use_cuda:
@@ -194,8 +207,7 @@ t1 = t.time()
 # training set data loader
 print('feature dict list:', feature_dict_list)
 train_dataset = TurnPredictionDataset(feature_dict_list, annotations_dir, train_list_path, sequence_length,
-                                      prediction_length, 'train', data_select=data_set_select, train_on_f=train_on_f,
-                                      train_on_g=train_on_g)
+                                      prediction_length, 'train', data_select=data_set_select)
 train_dataloader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=shuffle, num_workers=0,
                               drop_last=True, pin_memory=p_memory)
 feature_size_dict = train_dataset.get_feature_size_dict()
@@ -203,17 +215,13 @@ feature_size_dict = train_dataset.get_feature_size_dict()
 if slow_test:
     # slow test loader
     test_dataset = TurnPredictionDataset(feature_dict_list, annotations_dir, test_list_path, sequence_length,
-                                         prediction_length, 'test', data_select=data_set_select, test_on_f=test_on_f,
-                                         test_on_g=test_on_g)
-
+                                         prediction_length, 'test', data_select=data_set_select)
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0, drop_last=False,
                                  pin_memory=p_memory)
-
 else:
     # quick test loader
     test_dataset = TurnPredictionDataset(feature_dict_list, annotations_dir, test_list_path, sequence_length,
-                                         prediction_length, 'train', data_select=data_set_select, test_on_f=test_on_f,
-                                         test_on_g=test_on_g)
+                                         prediction_length, 'train', data_select=data_set_select)
     test_dataloader = DataLoader(test_dataset, batch_size=test_batch_size, shuffle=True, num_workers=0, drop_last=False)
 
 lstm_settings_dict = train_dataset.get_lstm_settings_dict(lstm_settings_dict) #add some extra items to the lstm settings related to the dataset
@@ -292,7 +300,6 @@ def perf_plot(results_save, results_key):
     p_max = np.round(np.max(np.array(results_save[results_key])), 4)
     p_min = np.round(np.min(np.array(results_save[results_key])), 4)
     #    p_last = np.round(results_save[results_key][-1],4)
-    plt.annotate(str(p_max), (np.argmax(np.array(results_save[results_key])), p_max))
     plt.annotate(str(p_max), (np.argmax(np.array(results_save[results_key])), p_max))
     plt.annotate(str(p_min), (np.argmin(np.array(results_save[results_key])), p_min))
     #    plt.annotate(str(p_last), (len(results_save[results_key])-1,p_last))
@@ -399,7 +406,7 @@ def test():
         results_dict[conv_key + '/' + data_select_dict[data_set_select][0]] = np.array(
             results_dict[conv_key + '/' + data_select_dict[data_set_select][0]]).reshape(-1, prediction_length)
 
-    # get hold-shift f-scores
+    # get hold-shift f-scores 
     for pause_str in pause_str_list:
         true_vals = list()
         predicted_class = list()
@@ -426,7 +433,7 @@ def test():
         results_save['tp_' + pause_str].append(tp)
         print('majority vote f-score(' + pause_str + '):' + str(
             f1_score(true_vals, np.zeros([len(predicted_class)]).tolist(), average='weighted')))
-    # get prediction at onset f-scores
+    # get prediction at onset f-scores 
     # first get best threshold from training data
     if onset_test_flag: # this is set to true at top of file
         onset_train_true_vals = list()
@@ -537,6 +544,7 @@ def test():
 
 
 # %% Init model
+# model = LSTMPredictor(feature_size_dict, hidden_nodes, num_layers,train_batch_size,sequence_length,prediction_length,train_dataset.get_embedding_info(),dropout=dropout)
 embedding_info = train_dataset.get_embedding_info()
 
 model = LSTMPredictor(lstm_settings_dict=lstm_settings_dict, feature_size_dict=feature_size_dict,
@@ -573,11 +581,8 @@ results_save['train_losses'], results_save['test_losses'], results_save['indiv_p
 
 
 # %% Training
-best_loss = float("inf")
-best_model = None
-best_epoch = None
 for epoch in range(0, num_epochs):
-    model.train() # tells model you are in training mode, so e.g. apply dropout
+    model.train() #tells model you are in training mode, so e.g. apply dropout
     t_epoch_strt = t.time()
     loss_list = []
     model.change_batch_size_reset_states(train_batch_size)
@@ -588,6 +593,7 @@ for epoch in range(0, num_epochs):
         #            losses_dict = dict()
         train_results_lengths = train_dataset.get_results_lengths()
         for file_name in train_file_list:
+            #            for g_f in ['g','f']:
             for g_f in data_select_dict[data_set_select]:
                 # create new arrays for the onset results (the continuous predictions)
                 train_results_dict[file_name + '/' + g_f] = np.zeros(
@@ -613,9 +619,13 @@ for epoch in range(0, num_epochs):
         info = batch[5]
         model_output_logits = model(model_input)
 
+        #        model_output_logits = model(model_input[0],model_input[1],model_input[2],model_input[3])
+
+        # loss = loss_func_BCE(F.sigmoid(model_output_logits), y)
         loss = loss_func_BCE_Logit(model_output_logits,y)
         loss_list.append(loss.cpu().data.numpy())
         loss.backward()
+        #        optimizer.step()
         if grad_clip_bool:
             clip_grad_norm(model.parameters(), grad_clip)
         for opt in optimizer_list:
@@ -631,6 +641,7 @@ for epoch in range(0, num_epochs):
                                                                      gf_name_list,
                                                                      time_index_list,
                                                                      range(train_batch_length)):
+                #                train_results_dict[file_name+'/'+g_f_indx[0]][time_indices[0]:time_indices[1]] = model_output[batch_indx].data.cpu().numpy()
                 train_results_dict[file_name + '/' + g_f_indx][time_indices[0]:time_indices[1]] = model_output[
                     batch_indx].data.cpu().numpy()
 
@@ -641,12 +652,6 @@ for epoch in range(0, num_epochs):
     test()
     model.train()
     t_total_end = t.time()
-    print(f"\t Epoch: {epoch} \t New Loss: {results_save['test_losses'][-1]}")
-    print(f'\t Best Epoch: {best_epoch} \t Best Loss: {best_loss}')
-    if results_save['test_losses'][-1] < best_loss:
-        best_loss = results_save['test_losses'][-1]
-        best_model = deepcopy(model.state_dict())
-        best_epoch = epoch
     #        torch.save(model,)
     print(
         '{0} \t Test_loss: {1}\t Train_Loss: {2} \t FScore: {3}  \t Train_time: {4} \t Test_time: {5} \t Total_time: {6}'.format(
@@ -695,15 +700,8 @@ plt.close('all')
 plot_person_error(results_save['indiv_perf'][-1]['bar_chart_labels'],
                   results_save['indiv_perf'][-1]['bar_chart_vals'], 'barchart')
 plt.close('all')
-print(f'should have done the pickle dump to {results_dir}/{result_dir_name}')
 pickle.dump(results_save, open(results_dir + '/' + result_dir_name + '/results.p', 'wb'))
-pickle.dump(train_results_dict, open(results_dir + '/' + result_dir_name + '/train_results_dict.p', 'wb'))
-
-print(f"last model saved at epoch {epoch}, with a training loss of {np.round(results_save['test_losses'][-1], 4)}")
-torch.save(model.state_dict(), results_dir + '/' + result_dir_name + '/last_model.p')
-print(f"best model saved at epoch {best_epoch}, with a training loss of {best_loss}")
-torch.save(best_model, results_dir + '/' + result_dir_name + '/best_model.p')
-
+torch.save(model.state_dict(), results_dir + '/' + result_dir_name + '/model.p')
 if len(argv) == proper_num_args:
     json.dump(argv[1], open(results_dir + '/' + result_dir_name + '/settings.json', 'w'), indent=4, sort_keys=True)
 

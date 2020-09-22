@@ -106,7 +106,7 @@ t_1=t.time()
 #for file_name in file_list:
 #file_name = file_list[0]
 def file_run(file_name):
-    """Takes a file name as an argument and uses it to define filepaths to load and save data in csv format. Returns a dictionary
+"""Takes a file name as an argument and uses it to define filepaths to load and save data in csv format. Returns a dictionary 
     containing the f (information follower) & g (information giver) word features. Annot_f is a column of the ‘follower’ csv with the heading
     ‘frameTimes’. Each item in the column is added to the list ‘split_indices’. Max_len is set equal to the length of the item in data_f_temp 
     with the most words(?). Function iterates over features_list (but it is a list with a single item, ['word']) and fills arrays with the f&g data for each feature. """

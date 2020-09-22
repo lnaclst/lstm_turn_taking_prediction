@@ -1,2 +1,0 @@
-python run_f_g_experiments_no_subnets_lingonly.py
-python run_f_g_experiments_two_subnets.py

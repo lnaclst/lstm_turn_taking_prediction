@@ -1,10 +1,20 @@
 # -*- coding: utf-8 -*-
 import json
+#from subprocess import Popen,PIPE
 import subprocess
+import torch.multiprocessing as multiprocessing
+
+import sys
+import pandas as pd
+import time as t
+import platform
 import os
 import pickle
 import numpy as np
 import feature_vars as feat_dicts
+from time import gmtime, strftime
+#import shutil
+from random import randint
 
 
 
@@ -16,7 +26,16 @@ no_subnets = True
 
 experiment_top_path = './no_subnets/'
 
-py_env = '/group/project/cstr1/mscslp/2019-20/s0910315_Sarah_Burne_James/miniconda3/bin/python'
+plat = platform.linux_distribution()[0]
+#plat = 'not_arch'
+if plat == 'arch': 
+    print('platform: arch')
+    py_env =  '/home/matt/anaconda3/bin/python'
+elif plat == 'debian':
+    py_env = '../../anaconda3/bin/python'
+else:
+    print('platform: '+plat)
+    py_env='/home/mroddy/anaconda3/envs/py36/bin/python'
 
 
 
@@ -189,7 +208,7 @@ Acous_10ms_Ling_10ms = {
 
 #%% Experiments list
 
-gpu_select = 3
+gpu_select = 0
 test_indices = [0,1,2,3,4]
 
 experiment_name_list = [

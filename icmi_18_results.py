@@ -6,7 +6,7 @@ import os
 import pickle
 import numpy as np
 
-gpu_select = 3
+gpu_select = 0
 test_indices = [0, 1, 2, 3, 4]
 num_workers = 1
 num_epochs = 1500
